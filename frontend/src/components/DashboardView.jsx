@@ -3,16 +3,33 @@ import {
   fetchDashboardSummary,
   fetchCategoryBreakdown,
   fetchTopDonors,
-  fetchRecentOperations
+  fetchRecentOperations,
+  fetchInventoryItems,
+  fetchSurplusListings,
+  claimListing
 } from '../api';
+import {
+  Store,
+  Heart,
+  Clock,
+  Truck,
+  AlertTriangle,
+  ArrowRight,
+  ShieldCheck,
+  PlusCircle,
+  Sparkles,
+  Users2,
+  Calendar,
+  CheckCircle2
+} from 'lucide-react';
 
-export default function DashboardView({ onNavigateToListing }) {
+export default function DashboardView({ currentRole = 'admin', onNavigateToListing }) {
   const [summary, setSummary] = useState({
-    listings_active: 842,
-    participating_restaurants: 284,
-    food_rescued_kg: 12840,
+    listings_active: 846,
+    participating_restaurants: 289,
+    food_rescued_kg: 12958,
     food_rescued_period: 'this month',
-    co2_prevented_kg: 6420,
+    co2_prevented_kg: 6479,
     co2_label: 'est. impact',
     ngos_active: 64,
     meals_label: 'serving 8,200 meals'
@@ -43,6 +60,10 @@ export default function DashboardView({ onNavigateToListing }) {
     { listing_id: 'LST-4817', donor: 'Spice Garden', food_type: 'Mixed Cooked', qty_kg: 42, ngo_assigned: 'City Relief', status: 'Picked Up' },
   ]);
 
+  const [donorInventory, setDonorInventory] = useState([]);
+  const [availableListings, setAvailableListings] = useState([]);
+  const [claimedNotice, setClaimedNotice] = useState(null);
+
   useEffect(() => {
     async function loadData() {
       try {
@@ -54,50 +75,283 @@ export default function DashboardView({ onNavigateToListing }) {
         if (donors && donors.length) setTopDonors(donors);
         const ops = await fetchRecentOperations();
         if (ops && ops.length) setOperations(ops);
+
+        // Load donor inventory items
+        const inv = await fetchInventoryItems('biz_1');
+        if (inv) setDonorInventory(inv.slice(0, 4));
+
+        // Load available listings for NGO
+        const list = await fetchSurplusListings();
+        if (list) setAvailableListings(list.filter(l => l.status === 'Available'));
       } catch (err) {
         console.error("Failed to load dashboard data:", err);
       }
     }
     loadData();
-  }, []);
+  }, [currentRole]);
 
   const maxCategoryWeight = Math.max(...categories.map(c => c.weight_kg), 5000);
 
   const getStatusBadge = (status) => {
     switch (status) {
       case 'Picked Up':
-        return (
-          <span className="inline-flex items-center px-3 py-1 rounded-md text-xs font-semibold bg-[#22c55e] text-white">
-            Picked Up
-          </span>
-        );
+        return <span className="inline-flex items-center px-3 py-1 rounded-md text-xs font-semibold bg-[#22c55e] text-white">Picked Up</span>;
       case 'In Transit':
-        return (
-          <span className="inline-flex items-center px-3 py-1 rounded-md text-xs font-semibold bg-[#fef3c7] text-[#b45309]">
-            In Transit
-          </span>
-        );
+        return <span className="inline-flex items-center px-3 py-1 rounded-md text-xs font-semibold bg-[#fef3c7] text-[#b45309]">In Transit</span>;
       case 'Scheduled':
-        return (
-          <span className="inline-flex items-center px-3 py-1 rounded-md text-xs font-semibold bg-[#e0e7ff] text-[#4338ca]">
-            Scheduled
-          </span>
-        );
-      case 'Available':
-        return (
-          <span className="inline-flex items-center px-3 py-1 rounded-md text-xs font-semibold bg-emerald-100 text-emerald-800">
-            Available
-          </span>
-        );
+        return <span className="inline-flex items-center px-3 py-1 rounded-md text-xs font-semibold bg-[#e0e7ff] text-[#4338ca]">Scheduled</span>;
       default:
-        return (
-          <span className="inline-flex items-center px-3 py-1 rounded-md text-xs font-semibold bg-slate-100 text-slate-700">
-            {status}
-          </span>
-        );
+        return <span className="inline-flex items-center px-3 py-1 rounded-md text-xs font-semibold bg-slate-100 text-slate-700">{status}</span>;
     }
   };
 
+  const handleNgoClaim = async (listing) => {
+    try {
+      await claimListing(listing.id, 'ngo_1', null, 'Hope Shelter Van #1');
+      setClaimedNotice(`Successfully claimed ${listing.food_type} (${listing.quantity_kg} kg)! Driver dispatched.`);
+      setAvailableListings(prev => prev.filter(l => l.id !== listing.id));
+    } catch (err) {
+      alert("Claim failed: " + err.message);
+    }
+  };
+
+  // ==================== 1. DONOR VIEW (HOTEL SUNSHINE) ====================
+  if (currentRole === 'donor') {
+    return (
+      <div className="space-y-6 max-w-7xl mx-auto">
+        {/* Donor Profile Header */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-xs">
+          <div className="flex items-center space-x-3.5">
+            <div className="w-12 h-12 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-lg">
+              <Store className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h1 className="text-xl font-bold text-slate-900">Hotel Sunshine — Kitchen Portal</h1>
+                <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-100 text-emerald-800">
+                  #1 Top Donor
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                45 Brigade Road, Central District • Contact: manager@hotelsunshine.com
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={onNavigateToListing}
+            className="inline-flex items-center px-4 py-2 bg-[#10b981] hover:bg-emerald-600 text-white rounded-lg text-xs font-bold shadow-xs transition-colors"
+          >
+            <PlusCircle className="w-4 h-4 mr-1.5" />
+            + List Surplus Food
+          </button>
+        </div>
+
+        {/* Donor Specific 4 KPIs */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-xs relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-orange-500"></div>
+            <p className="text-xs font-medium text-slate-500">Total Donated by Us</p>
+            <p className="text-3xl font-extrabold text-slate-900 mt-2">1,840 kg</p>
+            <p className="text-xs font-semibold text-orange-600 mt-1">Leading partner this month</p>
+          </div>
+
+          <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-xs relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-emerald-500"></div>
+            <p className="text-xs font-medium text-slate-500">Inventory Shrinkage Salvaged</p>
+            <p className="text-3xl font-extrabold text-slate-900 mt-2">$7,820</p>
+            <p className="text-xs font-semibold text-emerald-600 mt-1">IRS Sec 170(e)(3) valuation</p>
+          </div>
+
+          <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-xs relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-cyan-500"></div>
+            <p className="text-xs font-medium text-slate-500">Our Carbon Offset</p>
+            <p className="text-3xl font-extrabold text-slate-900 mt-2">4,600 kg</p>
+            <p className="text-xs font-semibold text-cyan-600 mt-1">CO₂e greenhouse saved</p>
+          </div>
+
+          <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-xs relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-purple-500"></div>
+            <p className="text-xs font-medium text-slate-500">Active Listings in Transit</p>
+            <p className="text-3xl font-extrabold text-slate-900 mt-2">2 Batches</p>
+            <p className="text-xs font-semibold text-purple-600 mt-1">84 kg total today</p>
+          </div>
+        </div>
+
+        {/* Donor Inventory Watchlist & Recent Donations */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Left Column: Items Near Expiry (Actionable) */}
+          <div className="lg:col-span-7 bg-white rounded-xl border border-slate-200 p-6 shadow-xs">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-2">
+                <AlertTriangle className="w-4 h-4 text-amber-500" />
+                <h2 className="text-sm font-bold text-slate-900">
+                  Kitchen Inventory Expiry Watchlist
+                </h2>
+              </div>
+              <span className="text-xs text-amber-600 font-semibold">Action Recommended</span>
+            </div>
+
+            <div className="divide-y divide-slate-100">
+              {donorInventory.map((item) => (
+                <div key={item.id} className="py-3 flex items-center justify-between text-xs">
+                  <div>
+                    <h4 className="font-bold text-slate-800">{item.name}</h4>
+                    <span className="text-[11px] text-slate-500">
+                      {item.quantity} {item.unit} • Storage: {item.storage_type} • Best before: {item.expiry_date}
+                    </span>
+                  </div>
+                  <button
+                    onClick={onNavigateToListing}
+                    className="px-3 py-1.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold hover:bg-emerald-100"
+                  >
+                    Donate to NGO
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Right Column: Hotel Sunshine's Pickups Log */}
+          <div className="lg:col-span-5 bg-white rounded-xl border border-slate-200 p-6 shadow-xs">
+            <h2 className="text-sm font-bold text-slate-900 mb-4">
+              Our Recent Donation Pickups
+            </h2>
+
+            <div className="space-y-3">
+              {operations.filter(op => op.donor.includes('Hotel Sunshine')).map((op, i) => (
+                <div key={i} className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-bold text-slate-900">{op.listing_id} • {op.food_type}</span>
+                    {getStatusBadge(op.status)}
+                  </div>
+                  <p className="text-slate-600">{op.qty_kg} kg assigned to <strong>{op.ngo_assigned}</strong></p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ==================== 2. NGO VIEW (HOPE FOUNDATION) ====================
+  if (currentRole === 'ngo') {
+    return (
+      <div className="space-y-6 max-w-7xl mx-auto">
+        {/* NGO Header */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-xs">
+          <div className="flex items-center space-x-3.5">
+            <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-lg">
+              <Heart className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h1 className="text-xl font-bold text-slate-900">Hope Foundation — Charity Ingestion Hub</h1>
+                <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-blue-100 text-blue-800">
+                  Verified Food Shelter
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                10 Hope Avenue, Central • Daily Capacity: 150 kg/day • Serving 240 shelter residents
+              </p>
+            </div>
+          </div>
+
+          <div className="px-3.5 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs font-semibold text-emerald-800">
+            Intake Capacity Remaining Today: <strong>102 kg</strong>
+          </div>
+        </div>
+
+        {claimedNotice && (
+          <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 p-4 rounded-lg flex items-center justify-between text-xs font-bold">
+            <div className="flex items-center space-x-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span>{claimedNotice}</span>
+            </div>
+            <button onClick={() => setClaimedNotice(null)}>✕</button>
+          </div>
+        )}
+
+        {/* NGO Specific 4 KPIs */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-xs relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-emerald-500"></div>
+            <p className="text-xs font-medium text-slate-500">Total Food Received</p>
+            <p className="text-3xl font-extrabold text-slate-900 mt-2">3,400 kg</p>
+            <p className="text-xs font-semibold text-emerald-600 mt-1">This month's intake</p>
+          </div>
+
+          <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-xs relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-blue-500"></div>
+            <p className="text-xs font-medium text-slate-500">Meals Distributed</p>
+            <p className="text-3xl font-extrabold text-slate-900 mt-2">8,500</p>
+            <p className="text-xs font-semibold text-blue-600 mt-1">To local community families</p>
+          </div>
+
+          <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-xs relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-indigo-500"></div>
+            <p className="text-xs font-medium text-slate-500">Deliveries Arriving Today</p>
+            <p className="text-3xl font-extrabold text-slate-900 mt-2">2 Pickups</p>
+            <p className="text-xs font-semibold text-indigo-600 mt-1">Hotel Sunshine & FreshMart</p>
+          </div>
+
+          <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-xs relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-amber-500"></div>
+            <p className="text-xs font-medium text-slate-500">Cost Savings for Shelter</p>
+            <p className="text-3xl font-extrabold text-slate-900 mt-2">$14,450</p>
+            <p className="text-xs font-semibold text-amber-600 mt-1">Grocery budget saved</p>
+          </div>
+        </div>
+
+        {/* Live Available Food In Area to Claim */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-2">
+              <Sparkles className="w-4 h-4 text-emerald-600" />
+              <h2 className="text-sm font-bold text-slate-900">
+                Surplus Food Available in Your Proximity (Ready to Claim)
+              </h2>
+            </div>
+            <span className="text-xs text-slate-500">&lt;5 km from Hope Shelter</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {availableListings.length > 0 ? (
+              availableListings.map(l => (
+                <div key={l.id} className="border border-slate-200 rounded-lg p-4 bg-slate-50/50 hover:border-emerald-300 transition-all text-xs">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="font-mono text-[11px] font-bold text-slate-700">{l.listing_code}</span>
+                      <h4 className="text-sm font-bold text-slate-900 mt-0.5">{l.food_type}</h4>
+                      <p className="text-slate-600 font-medium">Donor: {l.business_name}</p>
+                    </div>
+                    <span className="text-base font-extrabold text-slate-900">{l.quantity_kg} kg</span>
+                  </div>
+
+                  <div className="mt-3 pt-2 border-t border-slate-200 flex justify-between items-center text-[11px] text-slate-500">
+                    <span>Pickup Window: {l.pickup_window_start.split(' ')[1]} - {l.pickup_window_end.split(' ')[1]}</span>
+                    <button
+                      onClick={() => handleNgoClaim(l)}
+                      className="px-3 py-1.5 bg-[#10b981] hover:bg-emerald-600 text-white font-bold rounded shadow-xs"
+                    >
+                      Claim & Request Driver
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-slate-400 py-4 col-span-2 text-center">
+                All nearby surplus listings currently claimed. New batches sync every 30 minutes.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ==================== 3. ADMIN / CENTRAL FOOD RESCUE VIEW (DEFAULT) ====================
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Title Header */}
@@ -163,7 +417,7 @@ export default function DashboardView({ onNavigateToListing }) {
 
       {/* Middle Section: Bar Chart & Top Donors */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Left Column: Bar Chart (7 cols) */}
+        {/* Left Column: Bar Chart (8 cols) */}
         <div className="lg:col-span-8 bg-white rounded-lg border border-slate-200/90 shadow-xs p-6">
           <h2 className="text-sm font-bold text-slate-900 mb-6">
             Food Rescued by Category (kg — Last 30 Days)
@@ -171,15 +425,12 @@ export default function DashboardView({ onNavigateToListing }) {
 
           <div className="h-56 flex items-end justify-between px-4 pb-2 border-b border-slate-100">
             {categories.map((cat) => {
-              // Calculate height in pixels (max 150px)
               const barHeightPx = Math.max(20, Math.round((cat.weight_kg / maxCategoryWeight) * 160));
               return (
                 <div key={cat.category} className="flex flex-col items-center flex-1 mx-1.5 h-full justify-end group">
-                  {/* Value number on top */}
                   <span className="text-xs font-bold text-slate-800 mb-1.5">
                     {cat.weight_kg}
                   </span>
-                  {/* Bar */}
                   <div
                     style={{
                       height: `${barHeightPx}px`,
@@ -188,7 +439,6 @@ export default function DashboardView({ onNavigateToListing }) {
                     }}
                     className="rounded-t-xs transition-all duration-300 group-hover:opacity-90 shadow-2xs"
                   ></div>
-                  {/* Category Label */}
                   <span className="text-[11px] font-medium text-slate-700 mt-2.5 truncate max-w-[65px] text-center">
                     {cat.category}
                   </span>

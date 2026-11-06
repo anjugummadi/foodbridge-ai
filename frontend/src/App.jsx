@@ -47,7 +47,7 @@ export default function App() {
   const renderMainContent = () => {
     switch (activeSidebar) {
       case 'dashboard':
-        return <DashboardView onNavigateToListing={() => handleSidebarChange('new-listing')} />;
+        return <DashboardView currentRole={currentRole} onNavigateToListing={() => handleSidebarChange('new-listing')} />;
       case 'new-listing':
         return <MarketplaceView onOpenNewListingModal={() => { setDonateItemData(null); setShowListingModal(true); }} />;
       case 'inventory':
