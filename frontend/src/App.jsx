@@ -7,6 +7,8 @@ import AiPredictionView from './components/AiPredictionView';
 import MarketplaceView from './components/MarketplaceView';
 import PickupsView from './components/PickupsView';
 import ImpactView from './components/ImpactView';
+import AnalyticsView from './components/AnalyticsView';
+import ReportsView from './components/ReportsView';
 import ListingModal from './components/ListingModal';
 
 export default function App() {
@@ -57,9 +59,11 @@ export default function App() {
       case 'pickup-routes':
         return <PickupsView />;
       case 'impact-tracker':
-      case 'analytics':
-      case 'reports':
         return <ImpactView />;
+      case 'analytics':
+        return <AnalyticsView />;
+      case 'reports':
+        return <ReportsView />;
       case 'settings':
         return (
           <div className="bg-white rounded-lg border border-slate-200 p-8 max-w-2xl mx-auto shadow-xs">
